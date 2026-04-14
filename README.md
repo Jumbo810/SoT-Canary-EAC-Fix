@@ -2,8 +2,8 @@
 
 A comprehensive technical breakdown and PowerShell automation script to bypass the Easy Anti-Cheat (EAC) kernel crash for *Sea of Thieves* on Windows 11 Insider Canary builds. This solution utilizes a temporary, automated firewall block to achieve a "fail-open" initialization, allowing the game to launch safely without dropping remote desktop connections.
 
-## 🐛 The Issue: The Canary Kernel Mismatch
-If you are running an experimental Windows 11 Insider build (specifically Canary Build 26200 or higher, such as Version 25H2 OS build 26200.8037), *Sea of Thieves* will immediately hard crash upon launch. 
+## 🐛 The Issue: The Insider Environment Crash
+If you have been running a long-standing Windows 11 Insider build (such as Version 25H2 OS build 26200.8037), *Sea of Thieves* may immediately hard crash upon launch. 
 
 ![Windows 11 Build 26200 Specification](assets/windows_build.png)
 
@@ -19,19 +19,27 @@ You may see various Easy Anti-Cheat error dialogs **(Don't worry if the exact er
 ![Launch Error 0xB](assets/error_0xb.png)
 
 **The Technical Root Cause:**
-Easy Anti-Cheat (EAC) operates as a Ring-0 kernel-mode driver (`EasyAntiCheat_EOS.sys`). Microsoft frequently alters the Windows kernel signature in Canary builds. Because these experimental signatures are not on Epic Games' cryptographic whitelist, EAC assumes the kernel is compromised. 
+Easy Anti-Cheat (EAC) operates as a Ring-0 kernel-mode driver (`EasyAntiCheat_EOS.sys`). In certain Windows Insider environments, systemic conflicts (such as telemetry hooks, Virtualization-Based Security (VBS), or registry cruft) cause EAC's network initialization to hang. 
 
-Instead of triggering a Blue Screen of Death (BSOD), EAC intentionally and safely unloads itself from the Filter Manager during the game's network initialization handshake. *Sea of Thieves* detects that the anti-cheat driver is missing and instantly terminates the process.
+Instead of triggering a Blue Screen of Death (BSOD), the `EasyAntiCheat_EOSSys` driver safely unloads itself from the Filter Manager during the network handshake. *Sea of Thieves* detects that the anti-cheat driver is missing and instantly terminates the process.
 
 ## 🔬 The Diagnostic Journey
-Initial attempts to fix this by reinstalling the Insider release of the game via the Microsoft Store and Xbox App failed, repeatedly getting stuck at 17.64GB downloaded. To definitively isolate this issue and prove it was a kernel mismatch rather than corrupted files or broken storefronts, two critical diagnostic steps were taken:
+Initial attempts to fix this by reinstalling the game via the Microsoft Store and Xbox App failed, repeatedly getting stuck at 17.64GB downloaded. *(Note: This specific Microsoft Store download bug appears to have recently been resolved by a minor Windows KB cumulative update).* 
+
+To isolate the issue and definitively prove it was a localized OS environment failure rather than corrupted game files, we ran diagnostics:
 
 1. **The Event Viewer Proof:** By checking `eventvwr.msc` immediately after a crash, the System logs showed Event ID 6 and Event ID 7045. These logs confirmed that the `EasyAntiCheat_EOSSys` driver was successfully injecting but then actively unloading itself right before the `.exe` crash.
 
    ![Event Viewer Log 1](assets/event_log_1.png)
    ![Event Viewer Log 2](assets/event_log_2.png)
 
-2. **The Stable OS Control Test:** To rule out corrupted game files, a Native VHDX (Virtual Hard Disk) partition was built on the drive. A clean, stable, non-Insider release of Windows 11 was installed inside it. Booting into that stable OS and launching the same 128GB game files worked flawlessly. This definitively isolated the Canary kernel as the sole point of failure.
+2. **The Environment Control Test:** To rule out corrupted game files, a Native VHDX partition was built, and a fresh, clean install of Windows 11 was booted via an ISO. We pointed it at the exact same 128GB game files, and **it launched flawlessly.** 
+
+   The twist? That "fresh" install actually had the **exact same** Windows Version (25H2 OS build 26200.8037) and Experience Pack as the broken Insider build:
+   
+   ![Fresh Windows 11 Build Works](assets/windows_stable_build.png)
+   
+   This proved the crash wasn't hard-locked to the Windows build number itself. Instead, the crash was caused by the *state* of the long-standing Insider environment. Regardless of the exact conflict, the firewall bypass script works perfectly to bypass it.
 
 ## 🚧 The Engineering Roadblocks
 Creating an automated bypass required navigating several technical constraints:
